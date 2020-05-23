@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+
+  zookeeper:
+    image: 'bitnami/zookeeper:latest'
+    ports:
+     - '2181'
+    environment:
+     - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - kafka-cluster
+      
+  volumes-provisioner-kafka1:
+    image: hasnat/volumes-provisioner
+    environment:
+      PROVISION_DIRECTORIES: "1001:1001:0755:/bitnami/kafka"
+    volumes:
+      - kafka1-vol:/bitnami/kafka
+    network_mode: none
+
+  volumes-provisioner-kafka2:
+    image: hasnat/volumes-provisioner
+    environment:
+      PROVISION_DIRECTORIES: "1001:1001:0755:/bitnami/kafka"
+    volumes:
+      - kafka2-vol:/bitnami/kafka
+    network_mode: none
+
+  volumes-provisioner-kafka3:
+    image: hasnat/volumes-provisioner
+    environment:
+      PROVISION_DIRECTORIES: "1001:1001:0755:/bitnami/kafka"
+    volumes:
+      - kafka3-vol:/bitnami/kafka
+    network_mode: none
+
+  kafka1:
+    hostname: 'kafka1'
+    image: 'bitnami/kafka:latest'
+    ports:
+      - '9092'
+    depends_on:
+      - volumes-provisioner-kafka1
+      - zookeeper
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    networks:
+      - kafka-cluster
+    volumes:
+       - "kafka1-vol:/bitnami/kafka"
+
+  kafka2:
+    hostname: 'kafka2'
+    image: 'bitnami/kafka:latest'
+    ports:
+      - '9092'
+    depends_on:
+      - volumes-provisioner-kafka2
+      - zookeeper
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    networks:
+      - kafka-cluster
+    volumes:
+       - kafka2-vol:/bitnami/kafka2
+
+  kafka3:
+    hostname: 'kafka3'
+    image: 'bitnami/kafka:latest'
+    ports:
+      - '9092'
+    depends_on:
+      - volumes-provisioner-kafka3
+      - zookeeper
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    networks:
+      - kafka-cluster
+    volumes:
+       - kafka3-vol:/bitnami/kafka2
+  
+  kafdrop:
+    image: 'obsidiandynamics/kafdrop:latest'
+    ports:
+      - '9000:9000'
+    depends_on:
+      - zookeeper
+      - kafka1
+      - kafka2
+      - kafka3
+    environment:
+      - KAFKA_BROKERCONNECT=kafka1:9092,kafka2:9092,kafka3:9092
+    networks:
+      - kafka-cluster
+
+networks:
+  kafka-cluster:
+    driver: bridge
+
+volumes:
+  kafka1-vol:
+  kafka2-vol:
+  kafka3-vol:
