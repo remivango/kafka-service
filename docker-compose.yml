@@ -1,5 +1,16 @@
 version: '3.8'
 
+networks:
+  kafka-cluster:
+    driver: bridge
+
+volumes:
+  zookeeper1-vol:
+  kafka1-vol:
+  kafka2-vol:
+  kafka3-vol:
+  grafana-vol:
+
 services:
 
   zookeeper:
@@ -8,40 +19,17 @@ services:
      - '2181'
     environment:
      - ALLOW_ANONYMOUS_LOGIN=yes
+     - ZOO_ENABLE_PROMETHEUS_METRICS=yes
     networks:
       - kafka-cluster
-      
-  volumes-provisioner-kafka1:
-    image: hasnat/volumes-provisioner
-    environment:
-      PROVISION_DIRECTORIES: "1001:1001:0755:/bitnami/kafka"
     volumes:
-      - kafka1-vol:/bitnami/kafka
-    network_mode: none
-
-  volumes-provisioner-kafka2:
-    image: hasnat/volumes-provisioner
-    environment:
-      PROVISION_DIRECTORIES: "1001:1001:0755:/bitnami/kafka"
-    volumes:
-      - kafka2-vol:/bitnami/kafka
-    network_mode: none
-
-  volumes-provisioner-kafka3:
-    image: hasnat/volumes-provisioner
-    environment:
-      PROVISION_DIRECTORIES: "1001:1001:0755:/bitnami/kafka"
-    volumes:
-      - kafka3-vol:/bitnami/kafka
-    network_mode: none
-
+       - zookeeper1-vol:/bitnami/zookeeper
   kafka1:
     hostname: 'kafka1'
     image: 'bitnami/kafka:latest'
     ports:
       - '9092'
     depends_on:
-      - volumes-provisioner-kafka1
       - zookeeper
     environment:
       - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
@@ -49,7 +37,7 @@ services:
     networks:
       - kafka-cluster
     volumes:
-       - "kafka1-vol:/bitnami/kafka"
+       - kafka1-vol:/bitnami/kafka
 
   kafka2:
     hostname: 'kafka2'
@@ -57,7 +45,6 @@ services:
     ports:
       - '9092'
     depends_on:
-      - volumes-provisioner-kafka2
       - zookeeper
     environment:
       - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
@@ -65,7 +52,7 @@ services:
     networks:
       - kafka-cluster
     volumes:
-       - kafka2-vol:/bitnami/kafka2
+       - kafka2-vol:/bitnami/kafka
 
   kafka3:
     hostname: 'kafka3'
@@ -73,7 +60,6 @@ services:
     ports:
       - '9092'
     depends_on:
-      - volumes-provisioner-kafka3
       - zookeeper
     environment:
       - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
@@ -81,7 +67,7 @@ services:
     networks:
       - kafka-cluster
     volumes:
-       - kafka3-vol:/bitnami/kafka2
+       - kafka3-vol:/bitnami/kafka
   
   kafdrop:
     image: 'obsidiandynamics/kafdrop:latest'
@@ -97,11 +83,30 @@ services:
     networks:
       - kafka-cluster
 
-networks:
-  kafka-cluster:
-    driver: bridge
+  prom:
+    image: quay.io/prometheus/prometheus:v2.0.0
+    volumes:
+     - ./monitor/prometheus.yml:/etc/prometheus/prometheus.yml
+    command: "--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus"
+    ports:
+     - 9090:9090
+    depends_on:
+     - exporter
+    networks:
+      - kafka-cluster
 
-volumes:
-  kafka1-vol:
-  kafka2-vol:
-  kafka3-vol:
+  exporter:
+    image: prom/node-exporter:latest
+    ports:
+     - "9100:9100"
+    networks:
+      - kafka-cluster
+
+  grafana:
+    image: grafana/grafana
+    ports:
+     - "3000:3000"
+    depends_on:
+      - prom
+    networks:
+      - kafka-cluster
