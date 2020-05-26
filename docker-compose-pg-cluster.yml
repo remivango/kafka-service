@@ -1,0 +1,91 @@
+---
+version: "3.8"
+
+networks:
+  crunchynet:
+
+volumes:
+  pg-primary-vol:
+  pg-replica-vol:
+
+services:
+  primary:
+    hostname: 'primary'
+    image: crunchydata/crunchy-postgres:centos7-10.3-1.8.2
+    environment:
+    - PGHOST=/tmp
+    - MAX_CONNECTIONS=10
+    - MAX_WAL_SENDERS=5
+    - PG_MODE=primary
+    - PG_PRIMARY_USER=primaryuser
+    - PG_PRIMARY_PASSWORD=password
+    - PG_DATABASE=testdb
+    - PG_USER=testuser
+    - PG_PASSWORD=password
+    - PG_ROOT_PASSWORD=password
+    - PG_PRIMARY_PORT=5432
+    volumes:
+    - pg-primary-vol:/pgdata
+    ports:
+    - "5432"
+    networks:
+    - crunchynet
+    deploy:
+      placement:
+        constraints:
+        - node.labels.type == primary
+        - node.role == worker
+  replica:
+    image: crunchydata/crunchy-postgres:centos7-10.3-1.8.2
+    environment:
+    - PGHOST=/tmp
+    - MAX_CONNECTIONS=10
+    - MAX_WAL_SENDERS=5
+    - PG_MODE=replica
+    - PG_PRIMARY_HOST=primary
+    - PG_PRIMARY_PORT=5432
+    - PG_PRIMARY_USER=primaryuser
+    - PG_PRIMARY_PASSWORD=password
+    - PG_DATABASE=testdb
+    - PG_USER=testuser
+    - PG_PASSWORD=password
+    - PG_ROOT_PASSWORD=password
+    volumes:
+    - pg-replica-vol:/pgdata
+    ports:
+    - "5432"
+    networks:
+    - crunchynet
+    deploy:
+      placement:
+        constraints:
+        - node.labels.type != primary
+        - node.role == worker
+
+  prom:
+    image: quay.io/prometheus/prometheus:v2.0.0
+    volumes:
+     - ./monitor/prometheus.yml:/etc/prometheus/prometheus.yml
+    command: "--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus"
+    ports:
+     - 9090:9090
+    depends_on:
+     - exporter
+    networks:
+      - crunchynet
+
+  exporter:
+    image: prom/node-exporter:latest
+    ports:
+     - "9100:9100"
+    networks:
+      - crunchynet
+
+  grafana:
+    image: grafana/grafana
+    ports:
+     - "3000:3000"
+    depends_on:
+      - prom
+    networks:
+      - crunchynet
